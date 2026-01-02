@@ -69,28 +69,24 @@ class _ClerkSignInPanelState extends State<ClerkSignInPanel>
         ? authState.emailVerificationRedirectUri(context)
         : null;
 
-    await authState.safelyCall(
-      context,
-      () async {
-        await authState.attemptSignIn(
-          strategy: strategy!,
-          identifier: _identifier.orNullIfEmpty,
-          password: _password.orNullIfEmpty,
-          code: code?.orNullIfEmpty,
-          redirectUrl: redirectUri?.toString(),
-        );
+    await authState.safelyCall(context, () async {
+      await authState.attemptSignIn(
+        strategy: strategy!,
+        identifier: _identifier.orNullIfEmpty,
+        password: _password.orNullIfEmpty,
+        code: code?.orNullIfEmpty,
+        redirectUrl: redirectUri?.toString(),
+      );
+    }, onError: _onError);
 
-        if (authState.client.signIn?.factors case List<clerk.Factor> factors
-            when mounted && factors.any((f) => f.strategy.isEnterpriseSSO)) {
-          await authState.ssoSignIn(
-            context,
-            clerk.Strategy.enterpriseSSO,
-            identifier: _identifier.orNullIfEmpty,
-          );
-        }
-      },
-      onError: _onError,
-    );
+    if (authState.client.signIn?.factors case List<clerk.Factor> factors
+        when mounted && factors.any((f) => f.strategy.isEnterpriseSSO)) {
+      await authState.ssoSignIn(
+        context,
+        clerk.Strategy.enterpriseSSO,
+        identifier: _identifier.orNullIfEmpty,
+      );
+    }
   }
 
   Future<void> _openPasswordResetFlow() async {
@@ -115,8 +111,9 @@ class _ClerkSignInPanelState extends State<ClerkSignInPanel>
 
     final signIn = authState.signIn ?? clerk.SignIn.empty;
     final l10ns = authState.localizationsOf(context);
-    final canResetPassword =
-        env.config.firstFactors.any((f) => f.isPasswordResetter);
+    final canResetPassword = env.config.firstFactors.any(
+      (f) => f.isPasswordResetter,
+    );
 
     final themeExtension = ClerkAuth.themeExtensionOf(context);
     return Column(
@@ -195,7 +192,8 @@ class _ClerkSignInPanelState extends State<ClerkSignInPanel>
               when factors.isNotEmpty) //
             Openable(
               key: ValueKey<clerk.Stage>(stage),
-              open: signIn.hasVerification == false &&
+              open:
+                  signIn.hasVerification == false &&
                   _strategy != clerk.Strategy.emailLink &&
                   signIn.status.needsFactorFor(stage),
               child: _FactorList(
