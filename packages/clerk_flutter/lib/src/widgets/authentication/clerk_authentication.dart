@@ -81,38 +81,41 @@ class _ClerkAuthenticationState extends State<ClerkAuthentication>
                 ? localizations.welcomeBackPleaseSignInToContinue
                 : localizations.welcomePleaseFillInTheDetailsToGetStarted,
           ),
-          ClerkAuthBuilder(
-            builder: (context, authState) {
-              return Padding(
-                padding: horizontalPadding32,
-                child: Column(
-                  children: [
-                    if (authState.env.hasOauthStrategies) //
-                      Closeable(
-                        closed: authState.isSigningIn || authState.isSigningUp,
-                        child: Column(
-                          children: [
-                            ClerkOAuthPanel(
-                              onStrategyChosen: (strategy) async {
-                                await authState.ssoSignIn(context, strategy);
-                              },
-                            ),
-                            const OrDivider(),
-                          ],
+          ClerkErrorListener(
+            child: ClerkAuthBuilder(
+              builder: (context, authState) {
+                return Padding(
+                  padding: horizontalPadding32,
+                  child: Column(
+                    children: [
+                      if (authState.env.hasOauthStrategies) //
+                        Closeable(
+                          closed:
+                              authState.isSigningIn || authState.isSigningUp,
+                          child: Column(
+                            children: [
+                              ClerkOAuthPanel(
+                                onStrategyChosen: (strategy) async {
+                                  await authState.ssoSignIn(context, strategy);
+                                },
+                              ),
+                              const OrDivider(),
+                            ],
+                          ),
                         ),
+                      Openable(
+                        open: _state.isSigningIn,
+                        child: const ClerkSignInPanel(),
                       ),
-                    Openable(
-                      open: _state.isSigningIn,
-                      child: const ClerkSignInPanel(),
-                    ),
-                    Openable(
-                      open: _state.isSigningUp,
-                      child: const ClerkSignUpPanel(),
-                    ),
-                  ],
-                ),
-              );
-            },
+                      Openable(
+                        open: _state.isSigningUp,
+                        child: const ClerkSignUpPanel(),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
         ],
       ),
