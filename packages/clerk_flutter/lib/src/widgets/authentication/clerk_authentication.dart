@@ -45,6 +45,19 @@ class _ClerkAuthenticationState extends State<ClerkAuthentication>
   void _toggle() => setState(() => _state = _state.nextState);
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _resetAuthState();
+    });
+  }
+
+  Future<void> _resetAuthState() async {
+    final authState = ClerkAuth.of(context, listen: false);
+    await authState.resetClient();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final authState = ClerkAuth.of(context);
     if (authState.isNotAvailable) {
@@ -103,10 +116,7 @@ class _ClerkAuthenticationState extends State<ClerkAuthentication>
           ),
         ],
       ),
-      bottomPortion: _BottomPortion(
-        state: _state,
-        onChange: _toggle,
-      ),
+      bottomPortion: _BottomPortion(state: _state, onChange: _toggle),
     );
   }
 }
@@ -143,8 +153,9 @@ class _BottomPortion extends StatelessWidget {
                   text: state.isSigningIn
                       ? localizations.signUp
                       : localizations.signIn,
-                  style: themeExtension.styles.subheading
-                      .copyWith(color: themeExtension.colors.text),
+                  style: themeExtension.styles.subheading.copyWith(
+                    color: themeExtension.colors.text,
+                  ),
                   recognizer: TapGestureRecognizer()..onTap = onChange,
                 ),
               ],

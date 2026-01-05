@@ -20,8 +20,8 @@ typedef ClerkErrorCallback = void Function(clerk.AuthError);
 class ClerkAuthState extends clerk.Auth with ChangeNotifier {
   /// Construct a [ClerkAuthState]
   ClerkAuthState._(this._config)
-      : _loadingOverlay = ClerkLoadingOverlay(_config),
-        super(config: _config);
+    : _loadingOverlay = ClerkLoadingOverlay(_config),
+      super(config: _config);
 
   /// Create an [ClerkAuthState] object using appropriate Clerk credentials
   static Future<ClerkAuthState> create({
@@ -125,9 +125,9 @@ class ClerkAuthState extends clerk.Auth with ChangeNotifier {
           final newAccounts = client.user?.externalAccounts?.toSet() ?? {};
 
           if (newAccounts.difference(accounts).isNotEmpty && context.mounted) {
-            Navigator.of(context).popUntil(
-              (route) => route.settings.name != _kSsoRouteName,
-            );
+            Navigator.of(
+              context,
+            ).popUntil((route) => route.settings.name != _kSsoRouteName);
           }
         }
       } else {
@@ -180,9 +180,9 @@ class ClerkAuthState extends clerk.Auth with ChangeNotifier {
             onError: onError,
           );
           if (context.mounted) {
-            Navigator.of(context).popUntil(
-              (route) => route.settings.name != _kSsoRouteName,
-            );
+            Navigator.of(
+              context,
+            ).popUntil((route) => route.settings.name != _kSsoRouteName);
           }
         }
       } else {
@@ -199,7 +199,8 @@ class ClerkAuthState extends clerk.Auth with ChangeNotifier {
     clerk.Strategy strategy, {
     ClerkErrorCallback? onError,
   }) async {
-    final redirect = config.redirectionGenerator?.call(context, strategy) ??
+    final redirect =
+        config.redirectionGenerator?.call(context, strategy) ??
         Uri.parse(clerk.ClerkConstants.oauthRedirect);
     final redirectUrl = redirect.toString();
     await safelyCall(
@@ -240,9 +241,9 @@ class ClerkAuthState extends clerk.Auth with ChangeNotifier {
             onError: onError,
           );
           if (context.mounted) {
-            Navigator.of(context).popUntil(
-              (route) => route.settings.name != _kSsoRouteName,
-            );
+            Navigator.of(
+              context,
+            ).popUntil((route) => route.settings.name != _kSsoRouteName);
           }
         }
       } else {
@@ -257,8 +258,10 @@ class ClerkAuthState extends clerk.Auth with ChangeNotifier {
   /// not appropriate
   Uri? emailVerificationRedirectUri(BuildContext context) {
     if (env.supportsEmailLink) {
-      return config.redirectionGenerator
-          ?.call(context, clerk.Strategy.emailLink);
+      return config.redirectionGenerator?.call(
+        context,
+        clerk.Strategy.emailLink,
+      );
     }
     return null;
   }
@@ -351,9 +354,7 @@ class ClerkAuthState extends clerk.Auth with ChangeNotifier {
             ),
           );
         } else {
-          missing.add(
-            l10ns.aLengthOfMINOrGreater(criteria.minLength),
-          );
+          missing.add(l10ns.aLengthOfMINOrGreater(criteria.minLength));
         }
       }
 
@@ -370,9 +371,7 @@ class ClerkAuthState extends clerk.Auth with ChangeNotifier {
       }
 
       if (criteria.meetsSpecialCharCriteria(password) == false) {
-        missing.add(
-          l10ns.aSpecialCharacter(criteria.allowedSpecialCharacters),
-        );
+        missing.add(l10ns.aSpecialCharacter(criteria.allowedSpecialCharacters));
       }
 
       if (missing.isNotEmpty) {
@@ -475,6 +474,14 @@ class _SsoWebViewOverlayState extends State<_SsoWebViewOverlay> {
     });
   }
 
+  void _resetAuthState() {
+    final authState = ClerkAuth.of(context);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await authState.resetClient();
+    });
+    Navigator.of(context).pop();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -486,7 +493,7 @@ class _SsoWebViewOverlayState extends State<_SsoWebViewOverlay> {
             return Text(snapshot.data ?? '');
           },
         ),
-        actions: const [CloseButton()],
+        actions: [CloseButton(onPressed: _resetAuthState)],
       ),
       body: WebViewWidget(controller: controller),
     );
