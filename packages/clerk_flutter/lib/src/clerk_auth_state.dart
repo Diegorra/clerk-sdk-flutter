@@ -417,12 +417,21 @@ class _SsoWebViewOverlayState extends State<_SsoWebViewOverlay> {
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageFinished: (_) => _updateTitle(),
-          onWebResourceError: (e) => widget.onError(
-            clerk.AuthError(
-              code: clerk.AuthErrorCode.webviewErrorResponse,
-              message: e.description,
-            ),
-          ),
+          onWebResourceError: (e) {
+            final description = e.description.toLowerCase();
+            final isBenign =
+                description.contains('frame load interrupted') ||
+                description.contains('net::err_aborted');
+            if (isBenign) {
+              return;
+            }
+            widget.onError(
+              clerk.AuthError(
+                code: clerk.AuthErrorCode.webviewErrorResponse,
+                message: e.description,
+              ),
+            );
+          },
           onNavigationRequest: (NavigationRequest request) async {
             try {
               if (request.url.startsWith(clerk.ClerkConstants.oauthRedirect)) {
