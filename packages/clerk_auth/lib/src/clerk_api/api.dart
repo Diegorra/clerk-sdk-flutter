@@ -172,6 +172,13 @@ class Api with Logging {
     return await _fetchApiResponse('/client/sessions/${session.id}/touch');
   }
 
+  /// Touch (set active) a session by id. Use after sign-up verification when
+  /// the response has sign_up.status=complete and created_session_id but the
+  /// client does not yet have the session in client.sessions (per Clerk docs).
+  Future<ApiResponse> activateSessionById(String sessionId) async {
+    return await _fetchApiResponse('/client/sessions/$sessionId/touch');
+  }
+
   /// Signs out of a given [Session] (and removes it from the current [Client])
   ///
   Future<ApiResponse> signOutOf(Session session) async {
@@ -274,7 +281,8 @@ class Api with Logging {
   }
 
   /// Supply the code for a previously prepared a [SignUp]
-  ///
+  /// (e.g. attemptEmailAddressVerification: strategy=email_code, code only).
+  /// See https://clerk.com/docs/reference/frontend-api
   Future<ApiResponse> attemptSignUp(
     SignUp signUp, {
     required Strategy strategy,

@@ -660,14 +660,36 @@ class Auth {
       switch (client.signUp) {
         case SignUp signUp
             when strategy.requiresVerification && hasVerificationCredential:
-          await _api
-              .attemptSignUp(
-                signUp,
-                strategy: strategy,
-                code: code,
-                signature: signature,
-              )
-              .then(_housekeeping);
+          final resp = await _api.attemptSignUp(
+            signUp,
+            strategy: strategy,
+            code: code,
+            signature: signature,
+          );
+          _housekeeping(resp);
+          var rc = resp.client;
+          var su = rc?.signUp;
+          // If backend returns missing=[password] after verification, supply it via
+          // PATCH (updateSignUp). attempt_verification does not accept password.
+          final missingNames = su?.missingFields.map((f) => f.name).toList() ?? <String>[];
+          if (resp.hasClient &&
+              su != null &&
+              missingNames.contains(Field.password.name) &&
+              password != null &&
+              password!.isNotEmpty) {
+            final updateResp = await _api.updateSignUp(su, password: password);
+            _housekeeping(updateResp);
+            rc = updateResp.client;
+            su = rc?.signUp;
+          }
+          // When sign-up is complete, touch session if needed.
+          if (rc != null &&
+              su?.status == Status.complete &&
+              su?.createdSessionId != null &&
+              rc.user == null) {
+            final touchResp = await _api.activateSessionById(su!.createdSessionId!);
+            _housekeeping(touchResp);
+          }
 
         case SignUp signUp
             when signUp.status == Status.missingRequirements &&

@@ -47,14 +47,10 @@ class _ClerkAuthenticationState extends State<ClerkAuthentication>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _resetAuthState();
-    });
-  }
-
-  Future<void> _resetAuthState() async {
-    final authState = ClerkAuth.of(context, listen: false);
-    await authState.resetClient();
+    // Do NOT reset client here. Resetting on every mount wipes in-progress
+    // sign-up (e.g. after user enters verification code), so isSignedIn never
+    // gets a chance. The app should call resetClient once when opening the
+    // auth screen (e.g. in SignInPage.initState).
   }
 
   @override

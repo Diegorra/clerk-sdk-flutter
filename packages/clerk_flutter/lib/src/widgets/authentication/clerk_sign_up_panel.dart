@@ -89,9 +89,24 @@ class _ClerkSignUpPanelState extends State<ClerkSignUpPanel>
     required clerk.Strategy strategy,
   }) async {
     final authState = ClerkAuth.of(context, listen: false);
+    // attempt_verification only accepts strategy+code. If backend returns
+    // missing=[password], Auth will PATCH with password (from _values).
+    final password = authState.signUp?.requires(clerk.Field.password) == true
+        ? _valueOrNull(clerk.UserAttribute.password)
+        : null;
     await authState.safelyCall(context, () async {
-      await authState.attemptSignUp(strategy: strategy, code: code);
+      await authState.attemptSignUp(
+        strategy: strategy,
+        code: code,
+        password: password,
+        passwordConfirmation: password,
+      );
     });
+    // If verification succeeded on the backend but the response didn't update
+    // our client (e.g. session in response), refresh to get current state.
+    if (!authState.isSignedIn && context.mounted) {
+      await authState.refreshClient();
+    }
   }
 
   Future<void> _continue(List<_Attribute> attributes) async {
@@ -244,11 +259,28 @@ class _ClerkSignUpPanelState extends State<ClerkSignUpPanel>
             closed: _state.isInput ||
                 signUp?.unverified(clerk.Field.forUserAttribute(attr)) != true,
             onSubmit: (code) async {
-              await _sendCode(
-                strategy: clerk.Strategy.forUserAttribute(attr),
-                code: code,
-              );
-              return false;
+              try {
+                await _sendCode(
+                  strategy: clerk.Strategy.forUserAttribute(attr),
+                  code: code,
+                );
+                // Return true on success so the code input stops loading and
+                // the UI can transition (e.g. SignInPage pops when isSignedIn).
+                final authState = ClerkAuth.of(context, listen: false);
+                return authState.isSignedIn;
+              } catch (e, stack) {
+                // Ensure any uncaught exception (network, parse, etc.) is
+                // reported and loading state is cleared (we return false).
+                if (context.mounted) {
+                  ClerkAuth.of(context, listen: false).addError(
+                    clerk.AuthError(
+                      code: clerk.AuthErrorCode.serverErrorResponse,
+                      message: e.toString(),
+                    ),
+                  );
+                }
+                return false;
+              }
             },
             onResend: _reset,
           ),

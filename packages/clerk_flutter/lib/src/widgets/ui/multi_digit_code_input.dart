@@ -235,24 +235,26 @@ class _MultiDigitCodeInputState extends State<MultiDigitCodeInput>
 
   @override
   Future<void> updateEditingValue(TextEditingValue value) async {
+    if (!mounted) return;
     setState(() => _editingValue = value);
     if (value.text.length == widget.length) {
+      if (!mounted) return;
       setState(() => loading = true);
       final succeeded = await widget.onSubmit(value.text);
-      if (context.mounted) {
-        _focusNode.nextFocus();
-        if (succeeded == false) {
-          _editingValue = const TextEditingValue(
-            text: '',
-            selection: TextSelection.collapsed(offset: 0),
-          );
-          requestKeyboard();
-        }
-        setState(() => loading = false);
+      if (!mounted) return;
+      _focusNode.nextFocus();
+      if (succeeded == false) {
+        _editingValue = const TextEditingValue(
+          text: '',
+          selection: TextSelection.collapsed(offset: 0),
+        );
+        requestKeyboard();
       }
+      setState(() => loading = false);
     }
-    if (context.mounted) {
-      _openInputConnection();
+    if (!mounted) return;
+    _openInputConnection();
+    if (mounted && _connection != null) {
       setState(() => _connection!.setEditingState(_editingValue));
     }
   }
