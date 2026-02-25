@@ -142,18 +142,31 @@ class _ClerkSignUpPanelState extends State<ClerkSignUpPanel>
         ?.replaceAll(_phoneNumberRE, '')
         .orNullIfEmpty;
 
+    // Use password strategy only when sign-up requires it; otherwise use
+    // email_code so the backend accepts the request when "Sign-up with password"
+    // is disabled in the Clerk Dashboard.
+    final requiresPassword =
+        authState.signUp?.requires(clerk.Field.password) == true;
+    final usePasswordStrategy =
+        requiresPassword && (password?.isNotEmpty == true);
+    final strategy = usePasswordStrategy
+        ? clerk.Strategy.password
+        : (emailAddress != null && authState.env.supportsEmailCode
+            ? clerk.Strategy.emailCode
+            : clerk.Strategy.password);
+
     await authState.safelyCall(
       context,
       () async {
         await authState.attemptSignUp(
-          strategy: clerk.Strategy.password,
+          strategy: strategy,
           firstName: _valueOrNull(clerk.UserAttribute.firstName),
           lastName: _valueOrNull(clerk.UserAttribute.lastName),
           username: username,
           emailAddress: emailAddress,
           phoneNumber: phoneNumber,
-          password: password,
-          passwordConfirmation: passwordConfirmation,
+          password: usePasswordStrategy ? password : null,
+          passwordConfirmation: usePasswordStrategy ? passwordConfirmation : null,
           redirectUrl: redirectUri?.toString(),
           legalAccepted: _needsLegalAcceptance ? _hasLegalAcceptance : null,
         );
