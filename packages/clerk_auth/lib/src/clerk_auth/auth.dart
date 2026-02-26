@@ -640,6 +640,7 @@ class Auth {
       );
     }
 
+    final didCreateInThisCall = !hasInitialSignUp;
     if (hasInitialSignUp == false) {
       await _api
           .createSignUp(
@@ -695,14 +696,19 @@ class Auth {
             when signUp.status == Status.missingRequirements &&
                 signUp.missingFields.isEmpty &&
                 signUp.unverifiedFields.isNotEmpty:
-          if (env.supportsPhoneCode && signUp.unverified(Field.phoneNumber)) {
+          // Skip prepareSignUp when we just created the sign-up with this strategy;
+          // createSignUp already triggers sending the verification code.
+          if (env.supportsPhoneCode &&
+              signUp.unverified(Field.phoneNumber) &&
+              !(didCreateInThisCall && strategy == Strategy.phoneCode)) {
             await _api
                 .prepareSignUp(signUp, strategy: Strategy.phoneCode)
                 .then(_housekeeping);
           }
 
           if (signUp.unverified(Field.emailAddress)) {
-            if (env.supportsEmailCode) {
+            if (env.supportsEmailCode &&
+                !(didCreateInThisCall && strategy == Strategy.emailCode)) {
               await _api
                   .prepareSignUp(signUp, strategy: Strategy.emailCode)
                   .then(_housekeeping);
@@ -732,9 +738,16 @@ class Auth {
         case SignUp signUp
             when signUp.status == Status.missingRequirements &&
                 signUp.missingFields.isEmpty:
-          await _api
-              .prepareSignUp(signUp, strategy: strategy)
-              .then(_housekeeping);
+          // Skip prepareSignUp when we just created with email_code/phone_code;
+          // createSignUp already sent the verification code.
+          final skipPrepare =
+              didCreateInThisCall &&
+              (strategy == Strategy.emailCode || strategy == Strategy.phoneCode);
+          if (!skipPrepare) {
+            await _api
+                .prepareSignUp(signUp, strategy: strategy)
+                .then(_housekeeping);
+          }
           if (code is String || signature is String) {
             await _api
                 .attemptSignUp(
