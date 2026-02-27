@@ -52,6 +52,7 @@ class _ClerkSignUpPanelState extends State<ClerkSignUpPanel>
   bool _needsLegalAcceptance = true;
   bool _hasLegalAcceptance = false;
   bool _highlightMissing = false;
+  bool _isLoading = false;
 
   static const _signUpAttributes = [
     clerk.UserAttribute.firstName,
@@ -110,6 +111,7 @@ class _ClerkSignUpPanelState extends State<ClerkSignUpPanel>
   }
 
   Future<void> _continue(List<_Attribute> attributes) async {
+    if (_isLoading) return;
     final authState = ClerkAuth.of(context, listen: false);
 
     final password = _valueOrNull(clerk.UserAttribute.password);
@@ -170,35 +172,41 @@ class _ClerkSignUpPanelState extends State<ClerkSignUpPanel>
             ? clerk.Strategy.emailCode
             : clerk.Strategy.password);
 
-    await authState.safelyCall(
-      context,
-      () async {
-        await authState.attemptSignUp(
-          strategy: strategy,
-          firstName: _valueOrNull(clerk.UserAttribute.firstName),
-          lastName: _valueOrNull(clerk.UserAttribute.lastName),
-          username: username,
-          emailAddress: emailAddress,
-          phoneNumber: phoneNumber,
-          password: usePasswordStrategy ? password : null,
-          passwordConfirmation: usePasswordStrategy ? passwordConfirmation : null,
-          redirectUrl: redirectUri?.toString(),
-          legalAccepted: _needsLegalAcceptance ? _hasLegalAcceptance : null,
-        );
-      },
-    );
+    setState(() => _isLoading = true);
+    try {
+      await authState.safelyCall(
+        context,
+        () async {
+          await authState.attemptSignUp(
+            strategy: strategy,
+            firstName: _valueOrNull(clerk.UserAttribute.firstName),
+            lastName: _valueOrNull(clerk.UserAttribute.lastName),
+            username: username,
+            emailAddress: emailAddress,
+            phoneNumber: phoneNumber,
+            password: usePasswordStrategy ? password : null,
+            passwordConfirmation: usePasswordStrategy ? passwordConfirmation : null,
+            redirectUrl: redirectUri?.toString(),
+            legalAccepted: _needsLegalAcceptance ? _hasLegalAcceptance : null,
+          );
+        },
+      );
 
-    if (authState.signUp case clerk.SignUp signUp
-        when signUp.requiresEnterpriseSSOSignUp && mounted) {
-      await authState.ssoSignUp(context, clerk.Strategy.enterpriseSSO);
+      if (authState.signUp case clerk.SignUp signUp
+          when signUp.requiresEnterpriseSSOSignUp && mounted) {
+        await authState.ssoSignUp(context, clerk.Strategy.enterpriseSSO);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _state = authState.isSigningUp
+              ? _SignUpPanelState.waiting
+              : _SignUpPanelState.input;
+          _highlightMissing = true;
+        });
+      }
     }
-
-    setState(() {
-      _state = authState.isSigningUp
-          ? _SignUpPanelState.waiting
-          : _SignUpPanelState.input;
-      _highlightMissing = true;
-    });
   }
 
   void _acceptTerms() =>
@@ -322,7 +330,9 @@ class _ClerkSignUpPanelState extends State<ClerkSignUpPanel>
         Closeable(
           closed: (_state.isWaiting && isAwaitingCode == false) ||
               (_needsLegalAcceptance && _hasLegalAcceptance == false),
-          child: ClerkContinueButton(onPressed: () => _continue(attributes)),
+          child: ClerkContinueButton(
+            onPressed: _isLoading ? null : () => _continue(attributes),
+          ),
         ),
         if (_needsLegalAcceptance) //
           Closeable(

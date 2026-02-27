@@ -7,10 +7,10 @@ import 'package:flutter/material.dart';
 ///
 class ClerkContinueButton extends StatelessWidget {
   /// Constructor
-  const ClerkContinueButton({super.key, required this.onPressed});
+  const ClerkContinueButton({super.key, this.onPressed});
 
-  /// The function to call when the button is tapped
-  final VoidCallback onPressed;
+  /// The function to call when the button is tapped. When null, the button is disabled.
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {

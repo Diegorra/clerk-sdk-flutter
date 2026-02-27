@@ -35,6 +35,7 @@ class _ClerkSignInPanelState extends State<ClerkSignInPanel>
   String _identifier = '';
   String _password = '';
   String _code = '';
+  bool _isLoading = false;
 
   void _onError(clerk.AuthError _) {
     setState(() {
@@ -55,6 +56,7 @@ class _ClerkSignInPanelState extends State<ClerkSignInPanel>
     clerk.Strategy? strategy,
     String? code,
   }) async {
+    if (_isLoading) return;
     strategy ??= _strategy;
     code ??= _code;
 
@@ -65,27 +67,32 @@ class _ClerkSignInPanelState extends State<ClerkSignInPanel>
       });
     }
 
-    final redirectUri = strategy == clerk.Strategy.emailLink
-        ? authState.emailVerificationRedirectUri(context)
-        : null;
+    setState(() => _isLoading = true);
+    try {
+      final redirectUri = strategy == clerk.Strategy.emailLink
+          ? authState.emailVerificationRedirectUri(context)
+          : null;
 
-    await authState.safelyCall(context, () async {
-      await authState.attemptSignIn(
-        strategy: strategy!,
-        identifier: _identifier.orNullIfEmpty,
-        password: _password.orNullIfEmpty,
-        code: code?.orNullIfEmpty,
-        redirectUrl: redirectUri?.toString(),
-      );
-    }, onError: _onError);
+      await authState.safelyCall(context, () async {
+        await authState.attemptSignIn(
+          strategy: strategy!,
+          identifier: _identifier.orNullIfEmpty,
+          password: _password.orNullIfEmpty,
+          code: code?.orNullIfEmpty,
+          redirectUrl: redirectUri?.toString(),
+        );
+      }, onError: _onError);
 
-    if (authState.client.signIn?.factors case List<clerk.Factor> factors
-        when mounted && factors.any((f) => f.strategy.isEnterpriseSSO)) {
-      await authState.ssoSignIn(
-        context,
-        clerk.Strategy.enterpriseSSO,
-        identifier: _identifier.orNullIfEmpty,
-      );
+      if (authState.client.signIn?.factors case List<clerk.Factor> factors
+          when mounted && factors.any((f) => f.strategy.isEnterpriseSSO)) {
+        await authState.ssoSignIn(
+          context,
+          clerk.Strategy.enterpriseSSO,
+          identifier: _identifier.orNullIfEmpty,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -199,8 +206,9 @@ class _ClerkSignInPanelState extends State<ClerkSignInPanel>
               child: _FactorList(
                 factors: factors,
                 onPasswordChanged: (password) => _password = password,
-                onSubmit: (strategy) =>
-                    _continue(authState, strategy: strategy),
+                onSubmit: (strategy) {
+                  if (!_isLoading) _continue(authState, strategy: strategy);
+                },
               ),
             ),
         verticalMargin16,
@@ -209,7 +217,7 @@ class _ClerkSignInPanelState extends State<ClerkSignInPanel>
             if (_requiresBack(signIn)) //
               Expanded(
                 child: ClerkMaterialButton(
-                  onPressed: _reset,
+                  onPressed: _isLoading ? null : _reset,
                   label: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -226,7 +234,7 @@ class _ClerkSignInPanelState extends State<ClerkSignInPanel>
                 horizontalMargin8,
               Expanded(
                 child: ClerkMaterialButton(
-                  onPressed: () => _continue(authState),
+                  onPressed: _isLoading ? null : () => _continue(authState),
                   label: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.stretch,
