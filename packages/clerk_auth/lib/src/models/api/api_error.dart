@@ -6,6 +6,13 @@ import 'package:meta/meta.dart';
 
 part 'api_error.g.dart';
 
+// Maps Clerk's raw API error code strings to typed [AuthErrorCode] values.
+AuthErrorCode? _authErrorCodeFromClerkCode(String? code) => switch (code) {
+      'form_identifier_not_found' => AuthErrorCode.identifierNotFound,
+      'too_many_requests' => AuthErrorCode.tooManyRequests,
+      _ => null,
+    };
+
 /// [ApiError] Clerk object
 @immutable
 @JsonSerializable()
@@ -40,7 +47,15 @@ class ApiError with InformativeToStringMixin {
 
   /// fromJson
   static ApiError fromJson(dynamic json) {
-    return _$ApiErrorFromJson(json as Map<String, dynamic>);
+    final e = _$ApiErrorFromJson(json as Map<String, dynamic>);
+    final mapped = _authErrorCodeFromClerkCode(e.code);
+    return mapped != null ? ApiError(
+      message: e.message,
+      code: e.code,
+      meta: e.meta,
+      longMessage: e.longMessage,
+      authErrorCode: mapped,
+    ) : e;
   }
 
   /// toJson

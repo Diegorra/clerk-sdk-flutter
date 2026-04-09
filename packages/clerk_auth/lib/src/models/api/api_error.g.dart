@@ -42,6 +42,7 @@ const _$AuthErrorCodeEnumMap = {
   AuthErrorCode.noStageForStatus: 'noStageForStatus',
   AuthErrorCode.noSessionTokenRetrieved: 'noSessionTokenRetrieved',
   AuthErrorCode.noAssociatedStrategy: 'noAssociatedStrategy',
+  AuthErrorCode.strategyNotSupported: 'strategyNotSupported',
   AuthErrorCode.noAssociatedCodeRetrievalMethod:
       'noAssociatedCodeRetrievalMethod',
   AuthErrorCode.passwordMatchError: 'passwordMatchError',

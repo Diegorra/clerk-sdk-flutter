@@ -307,12 +307,15 @@ class Auth {
   /// Transfer an oAuth authentication into a [User]
   ///
   Future<void> transfer() async {
-    if (signIn?.isTransferable == true) {
+    if (signIn?.verification?.status.isTransferable == true) {
       await _api.transferSignUp().then(_housekeeping);
       update();
-    } else if (signUp?.isTransferable == true) {
-      await _api.transferSignIn().then(_housekeeping);
-      update();
+    } else {
+      final verifications = signUp?.verifications.values ?? const [];
+      if (verifications.any((v) => v.status.isTransferable)) {
+        await _api.transferSignIn().then(_housekeeping);
+        update();
+      }
     }
   }
 
@@ -397,87 +400,6 @@ class Auth {
         .addExternalAccount(strategy: strategy, redirectUrl: redirectUrl)
         .then(_housekeeping);
     update();
-  }
-
-  /// Sign in with an ID token from a provider (e.g., Apple)
-  ///
-  /// This method attempts to sign in an existing user using an ID token
-  /// obtained from an identity provider like Apple.
-  ///
-  /// **Transfer Flow:**
-  /// If the user doesn't exist, the verification status will be `transferable`.
-  /// Call [transfer] to switch to the sign-up flow.
-  ///
-  /// **Example:**
-  /// ```dart
-  /// await clerk_auth.idTokenSignIn(
-  ///   provider: IdTokenProvider.apple,
-  ///   idToken: credential.identityToken!,
-  /// );
-  ///
-  /// // Check if transfer needed
-  /// if (clerk_auth.signIn?.isTransferable == true) {
-  ///   await clerk_auth.transfer();
-  /// }
-  /// ```
-  ///
-  /// **Parameters:**
-  /// - [provider]: The identity provider (e.g., [IdTokenProvider.apple])
-  /// - [idToken]: The ID token string obtained from the provider
-  ///
-  /// **Throws:**
-  /// [AuthError] if the API request fails. Errors are also sent to [errorStream].
-  Future<void> idTokenSignIn({
-    required IdTokenProvider provider,
-    required String idToken,
-  }) async {
-    await attemptSignIn(strategy: provider.strategy, token: idToken);
-  }
-
-  /// Sign up with an ID token from a provider (e.g., Apple)
-  ///
-  /// This method attempts to sign up a new user using an ID token
-  /// obtained from an identity provider like Apple.
-  ///
-  /// **Transfer Flow:**
-  /// If the user already exists, the verification status will be `transferable`.
-  /// Call [transfer] to switch to the sign-in flow.
-  ///
-  /// **Example:**
-  /// ```dart
-  /// await clerk_auth.idTokenSignUp(
-  ///   provider: IdTokenProvider.apple,
-  ///   idToken: credential.identityToken!,
-  ///   firstName: credential.givenName,
-  ///   lastName: credential.familyName,
-  /// );
-  ///
-  /// // Check if transfer needed
-  /// if (clerk_auth.signUp?.isTransferable == true) {
-  ///   await clerk_auth.transfer();
-  /// }
-  /// ```
-  ///
-  /// **Parameters:**
-  /// - [provider]: The identity provider (e.g., [IdTokenProvider.apple])
-  /// - [idToken]: The ID token string obtained from the provider
-  /// - [firstName]: Optional first name from the provider's credential
-  /// - [lastName]: Optional last name from the provider's credential
-  ///
-  /// **Throws:**
-  /// [AuthError] if the API request fails. Errors are also sent to [errorStream].
-  Future<void> idTokenSignUp({
-    required IdTokenProvider provider,
-    required String idToken,
-    String? firstName,
-    String? lastName,
-  }) async {
-    await attemptSignUp(
-      strategy: provider.strategy,
-      token: idToken,
-      firstName: firstName,
-      lastName: lastName,
-    );
   }
 
   /// Delete an external account
@@ -625,7 +547,6 @@ class Auth {
     String? password,
     String? passwordConfirmation,
     String? code,
-    String? token,
     String? signature,
     String? redirectUrl,
     bool? legalAccepted,
@@ -640,78 +561,51 @@ class Auth {
       );
     }
 
-    final didCreateInThisCall = !hasInitialSignUp;
     if (hasInitialSignUp == false) {
+      // When SAML/Enterprise SSO is enforced, sending any verification strategy
+      // on the initial POST causes Clerk to reject with "email_code is not
+      // allowed when SAML is used". Omit strategy entirely so Clerk responds
+      // with missing_fields=[saml, enterprise_sso, ...] which the switch below
+      // then handles by calling updateSignUp(strategy: saml).
       await _api
           .createSignUp(
-            strategy: strategy,
+            strategy: env.user.saml ? null : strategy,
             password: password,
             firstName: firstName,
             lastName: lastName,
             username: username,
             emailAddress: emailAddress,
             phoneNumber: phoneNumber,
-            token: token,
             legalAccepted: legalAccepted,
           )
           .then(_housekeeping);
-      return client;
     }
 
     if (client.user is! User) {
       switch (client.signUp) {
         case SignUp signUp
             when strategy.requiresVerification && hasVerificationCredential:
-          final resp = await _api.attemptSignUp(
-            signUp,
-            strategy: strategy,
-            code: code,
-            signature: signature,
-          );
-          _housekeeping(resp);
-          var rc = resp.client;
-          var su = rc?.signUp;
-          // If backend returns missing=[password] after verification, supply it via
-          // PATCH (updateSignUp). attempt_verification does not accept password.
-          final missingNames =
-              su?.missingFields.map((f) => f.name).toList() ?? <String>[];
-          if (resp.hasClient &&
-              su != null &&
-              missingNames.contains(Field.password.name) &&
-              password != null &&
-              password.isNotEmpty) {
-            final updateResp = await _api.updateSignUp(su, password: password);
-            _housekeeping(updateResp);
-            rc = updateResp.client;
-            su = rc?.signUp;
-          }
-          // When sign-up is complete, touch session if needed.
-          if (rc != null &&
-              su?.status == Status.complete &&
-              su?.createdSessionId != null &&
-              rc.user == null) {
-            final touchResp =
-                await _api.activateSessionById(su!.createdSessionId!);
-            _housekeeping(touchResp);
-          }
+          await _api
+              .attemptSignUp(
+                signUp,
+                strategy: strategy,
+                code: code,
+                signature: signature,
+              )
+              .then(_housekeeping);
 
         case SignUp signUp
             when signUp.status == Status.missingRequirements &&
                 signUp.missingFields.isEmpty &&
                 signUp.unverifiedFields.isNotEmpty:
-          // Skip prepareSignUp when we just created the sign-up with this strategy;
-          // createSignUp already triggers sending the verification code.
-          if (env.supportsPhoneCode &&
-              signUp.unverified(Field.phoneNumber) &&
-              !(didCreateInThisCall && strategy == Strategy.phoneCode)) {
+          if (env.supportsPhoneCode && signUp.unverified(Field.phoneNumber)) {
             await _api
                 .prepareSignUp(signUp, strategy: Strategy.phoneCode)
                 .then(_housekeeping);
           }
 
           if (signUp.unverified(Field.emailAddress)) {
-            if (env.supportsEmailCode &&
-                !(didCreateInThisCall && strategy == Strategy.emailCode)) {
+            if (env.supportsEmailCode) {
               await _api
                   .prepareSignUp(signUp, strategy: Strategy.emailCode)
                   .then(_housekeeping);
@@ -729,11 +623,22 @@ class Auth {
           }
 
         case SignUp signUp
-            when signUp.requiresEnterpriseSSOSignUp && redirectUrl is String:
+            when signUp.missing(Field.saml) ||
+                signUp.missing(Field.enterpriseSSO):
+          if (redirectUrl == null) {
+            addError(const AuthError(
+              code: AuthErrorCode.strategyNotSupported,
+              message:
+                  'SSO/SAML requires a redirectUrl (OAuth callback) to proceed.',
+            ));
+            return client;
+          }
+          // Override strategy to saml so Clerk accepts the PATCH — avoids
+          // "email_code is not allowed" when SAML/SSO is required.
           await _api
               .updateSignUp(
                 signUp,
-                strategy: strategy,
+                strategy: Strategy.saml,
                 redirectUrl: redirectUrl,
               )
               .then(_housekeeping);
@@ -741,16 +646,9 @@ class Auth {
         case SignUp signUp
             when signUp.status == Status.missingRequirements &&
                 signUp.missingFields.isEmpty:
-          // Skip prepareSignUp when we just created with email_code/phone_code;
-          // createSignUp already sent the verification code.
-          final skipPrepare = didCreateInThisCall &&
-              (strategy == Strategy.emailCode ||
-                  strategy == Strategy.phoneCode);
-          if (!skipPrepare) {
-            await _api
-                .prepareSignUp(signUp, strategy: strategy)
-                .then(_housekeeping);
-          }
+          await _api
+              .prepareSignUp(signUp, strategy: strategy)
+              .then(_housekeeping);
           if (code is String || signature is String) {
             await _api
                 .attemptSignUp(
@@ -974,9 +872,6 @@ class Auth {
     String? username,
     String? firstName,
     String? lastName,
-    String? primaryEmailAddressId,
-    String? primaryPhoneNumberId,
-    String? primaryWeb3WalletId,
     Map<String, dynamic>? metadata,
     File? avatar,
   }) async {
@@ -987,17 +882,11 @@ class Auth {
               username != user.username) ||
           (config.allowsFirstName &&
               firstName is String &&
-              firstName != user.firstName) ||
+              firstName != user.username) ||
           (config.allowsLastName &&
               lastName is String &&
               lastName != user.lastName) ||
-          (primaryEmailAddressId is String &&
-              primaryEmailAddressId != user.primaryEmailAddressId) ||
-          (primaryPhoneNumberId is String &&
-              primaryPhoneNumberId != user.primaryPhoneNumberId) ||
-          (primaryWeb3WalletId is String &&
-              primaryWeb3WalletId != user.primaryWeb3WalletId) ||
-          (metadata?.isNotEmpty == true);
+          metadata?.isNotEmpty == true;
       if (needsUpdate || avatar is File) {
         if (needsUpdate) {
           await _api
@@ -1005,9 +894,6 @@ class Auth {
                 username: config.allowsUsername ? username : null,
                 firstName: config.allowsFirstName ? firstName : null,
                 lastName: config.allowsLastName ? lastName : null,
-                primaryEmailAddressId: primaryEmailAddressId,
-                primaryPhoneNumberId: primaryPhoneNumberId,
-                primaryWeb3WalletId: primaryWeb3WalletId,
                 metadata: metadata,
               )
               .then(_housekeeping);
@@ -1059,15 +945,6 @@ class Auth {
     String code,
   ) async {
     await _api.verifyIdentifyingData(uid, code).then(_housekeeping);
-    update();
-  }
-
-  /// Attempt to delete some [UserIdentifyingData]
-  ///
-  Future<void> deleteIdentifyingData(
-    UserIdentifyingData uid,
-  ) async {
-    await _api.deleteIdentifyingData(uid).then(_housekeeping);
     update();
   }
 

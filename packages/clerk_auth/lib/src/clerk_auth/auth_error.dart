@@ -55,6 +55,9 @@ enum AuthErrorCode {
   /// No strategy associated with type,
   noAssociatedStrategy,
 
+  /// Verification strategy (e.g. email_code) not allowed; SSO/SAML flow required
+  strategyNotSupported,
+
   /// No code retrieval method associated with the strategy,
   noAssociatedCodeRetrievalMethod,
 
@@ -90,4 +93,10 @@ enum AuthErrorCode {
 
   /// Required fields are missing
   requiredFieldsAreMissing,
+
+  /// Identifier (email/phone/username) not found — user is not registered
+  identifierNotFound,
+
+  /// Too many requests (rate limited)
+  tooManyRequests,
 }

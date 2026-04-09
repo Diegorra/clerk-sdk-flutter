@@ -191,7 +191,7 @@ class Api with Logging {
   /// much or as little information as available
   ///
   Future<ApiResponse> createSignUp({
-    required Strategy strategy,
+    Strategy? strategy,
     String? username,
     String? firstName,
     String? lastName,
@@ -207,7 +207,7 @@ class Api with Logging {
     return await _fetchApiResponse(
       '/client/sign_ups',
       params: {
-        'strategy': strategy,
+        if (strategy != null) 'strategy': strategy,
         'username': username,
         'first_name': firstName,
         'last_name': lastName,
@@ -901,6 +901,8 @@ class Api with Logging {
       );
 
       return _processResponse(resp);
+    } on AuthError {
+      rethrow;
     } on SocketException catch (error, stacktrace) {
       logSevere('Connection issue', error, stacktrace);
       return ApiResponse.fatal(
@@ -996,15 +998,12 @@ class Api with Logging {
     );
 
     if (resp.statusCode == HttpStatus.tooManyRequests) {
-      final delay = int.tryParse(resp.headers['retry-after'] ?? '') ?? 5;
-      logSevere('Delaying ${delay}secs');
-      await Future.delayed(Duration(seconds: delay));
-      return await _fetch(
-        path: path,
-        method: method,
-        headers: headers,
-        params: params,
-        withSession: withSession,
+      final delay = int.tryParse(resp.headers['retry-after'] ?? '') ?? 60;
+      logSevere('Rate limited — retry-after ${delay}s. Surfacing to UI.');
+      throw AuthError(
+        code: AuthErrorCode.tooManyRequests,
+        message: 'Too many attempts. Please wait and try again in $delay seconds.',
+        argument: delay.toString(),
       );
     }
 
