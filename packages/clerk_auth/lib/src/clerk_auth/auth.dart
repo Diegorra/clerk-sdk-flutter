@@ -786,6 +786,8 @@ class Auth {
                   emailAddress: emailAddress,
                   phoneNumber: phoneNumber,
                   legalAccepted: legalAccepted,
+                  // Clerk requires redirect_url whenever strategy is sent (e.g. legal_accepted PATCH).
+                  redirectUrl: redirectUrl ?? ClerkConstants.oauthRedirect,
                 )
                 .then(_housekeeping);
           }

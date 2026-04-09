@@ -118,6 +118,7 @@ class _ClerkSignInPanelState extends State<ClerkSignInPanel>
 
     final signIn = authState.signIn ?? clerk.SignIn.empty;
     final l10ns = authState.localizationsOf(context);
+
     final canResetPassword = env.config.firstFactors.any(
       (f) => f.isPasswordResetter,
     );
