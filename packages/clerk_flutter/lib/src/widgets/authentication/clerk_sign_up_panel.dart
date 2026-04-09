@@ -12,10 +12,11 @@ import 'package:clerk_flutter/src/widgets/ui/clerk_phone_number_form_field.dart'
 import 'package:clerk_flutter/src/widgets/ui/clerk_text_form_field.dart';
 import 'package:clerk_flutter/src/widgets/ui/closeable.dart';
 import 'package:clerk_flutter/src/widgets/ui/common.dart';
-import 'package:clerk_flutter/src/widgets/ui/legal_acceptance_rich_text.dart';
 import 'package:collection/collection.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:phone_input/phone_input_package.dart';
+import 'package:url_launcher/url_launcher_string.dart';
 
 enum _SignUpPanelState {
   input,
@@ -353,7 +354,7 @@ class _ClerkSignUpPanelState extends State<ClerkSignUpPanel>
                     ),
                   ),
                 ),
-                const Expanded(child: LegalAcceptanceRichText()),
+                const Expanded(child: _LegalAcceptanceConfirmation()),
               ],
             ),
           ),
@@ -443,6 +444,84 @@ class _FormField extends StatelessWidget {
           ),
         _Attribute attribute => _formField(attribute),
       },
+    );
+  }
+}
+
+class _LegalAcceptanceConfirmation extends StatelessWidget {
+  const _LegalAcceptanceConfirmation();
+
+  List<TextSpan> _subSpans(
+    String text,
+    String target,
+    String? url,
+    ClerkThemeExtension themeExtension,
+  ) {
+    if (url case String url when url.isNotEmpty) {
+      final segments = text.split(target);
+      final spans = [TextSpan(text: segments.first)];
+      final recognizer = TapGestureRecognizer()
+        ..onTap = () => launchUrlString(url);
+
+      for (final segmentText in segments.skip(1)) {
+        spans.add(
+          TextSpan(
+            text: target,
+            style: TextStyle(color: themeExtension.colors.link),
+            recognizer: recognizer,
+          ),
+        );
+        if (segmentText.isNotEmpty) {
+          spans.add(TextSpan(text: segmentText));
+        }
+      }
+
+      return spans;
+    }
+
+    return [TextSpan(text: text)];
+  }
+
+  // We're assuming here that, whatever language has had its localizations
+  // generated, the `termsOfService` and `privacyPolicy` will be literal
+  // unique substrings of `acceptTerms`, so can be turned into links in
+  // this manner - and it's the responsibility of the engineer dealing with
+  // translations to ensure that's the case, so that this will work. (I'm not
+  // aware of any language where that won't work, but would love to be told
+  // if there is one.)
+  List<InlineSpan> _spans(BuildContext context) {
+    final authState = ClerkAuth.of(context, listen: false);
+    final display = authState.env.display;
+    final l10ns = authState.localizationsOf(context);
+    final themeExtension = ClerkAuth.themeExtensionOf(context);
+    final spans = _subSpans(
+      l10ns.acceptTerms,
+      l10ns.termsOfService,
+      display.termsUrl,
+      themeExtension,
+    );
+
+    return [
+      for (final span in spans) //
+        if (span.text case String text when span.recognizer == null) //
+          ..._subSpans(
+            text,
+            l10ns.privacyPolicy,
+            display.privacyPolicyUrl,
+            themeExtension,
+          )
+        else //
+          span,
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final themeExtension = ClerkAuth.themeExtensionOf(context);
+    return Text.rich(
+      TextSpan(children: _spans(context)),
+      maxLines: 2,
+      style: themeExtension.styles.subheading,
     );
   }
 }

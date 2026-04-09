@@ -70,24 +70,6 @@ class ClerkAuthState extends clerk.Auth with ChangeNotifier {
   static const _kRotatingTokenNonce = 'rotating_token_nonce';
   static const _kSsoRouteName = 'clerk_sso_popup';
 
-  /// OAuth callback query params: [Uri.queryParameters] plus fragment `#a=b&c=d`
-  /// (some IdPs / WebViews deliver the nonce only in the fragment).
-  static Map<String, String> _oauthCallbackQueryParams(Uri uri) {
-    final merged = Map<String, String>.from(uri.queryParameters);
-    if (uri.fragment.isEmpty) {
-      return merged;
-    }
-    for (final part in uri.fragment.split('&')) {
-      if (part.isEmpty) continue;
-      final i = part.indexOf('=');
-      if (i > 0) {
-        final k = part.substring(0, i);
-        merged[k] = Uri.decodeQueryComponent(part.substring(i + 1));
-      }
-    }
-    return merged;
-  }
-
   @override
   void update() {
     super.update();
@@ -290,7 +272,6 @@ class ClerkAuthState extends clerk.Auth with ChangeNotifier {
   /// If the link contains no known [clerk.Strategy], it is assumed that the
   /// final element of the [uri.path] will be the name of the strategy to use
   Future<bool> parseDeepLink(ClerkDeepLink link) async {
-    final qp = _oauthCallbackQueryParams(link.uri);
     final strategy = switch (link.strategy) {
       clerk.Strategy strategy when strategy.isKnown => strategy,
       _ => clerk.Strategy.fromJson(link.uri.pathSegments.last),
@@ -300,7 +281,7 @@ class ClerkAuthState extends clerk.Auth with ChangeNotifier {
       return false;
     } else if (strategy == clerk.Strategy.emailLink) {
       await refreshClient();
-    } else if (qp[_kRotatingTokenNonce] case String token
+    } else if (link.uri.queryParameters[_kRotatingTokenNonce] case String token
         when strategy.isSSO) {
       await completeOAuthSignIn(strategy: strategy, token: token);
     } else {
@@ -308,32 +289,7 @@ class ClerkAuthState extends clerk.Auth with ChangeNotifier {
       await transfer();
     }
 
-    await _autoAcceptLegalAfterSsoIfNeeded();
     return true;
-  }
-
-  /// After OAuth, Clerk may leave [SignUp] with only legal consent missing.
-  /// Submit automatically so the user is not blocked on a second screen.
-  Future<void> _autoAcceptLegalAfterSsoIfNeeded() async {
-    final su = client.signUp;
-    if (su == null || !su.missing(clerk.Field.legalAccepted)) {
-      return;
-    }
-    if (!env.user.signUp.legalConsentEnabled) {
-      return;
-    }
-    if (isSignedIn) {
-      return;
-    }
-    try {
-      await attemptSignUp(
-        strategy: clerk.Strategy.saml,
-        legalAccepted: true,
-        redirectUrl: clerk.ClerkConstants.oauthRedirect,
-      );
-    } on clerk.AuthError catch (e) {
-      addError(e);
-    }
   }
 
   /// Convenience method to make an auth call to the backend via ClerkAuth
