@@ -32,7 +32,13 @@ enum _AuthState {
 @immutable
 class ClerkAuthentication extends StatefulWidget {
   /// Constructs a new [ClerkAuthentication].
-  const ClerkAuthentication({super.key});
+  const ClerkAuthentication({
+    super.key,
+    this.showSignUp = true,
+  });
+
+  /// Whether to show the sign up panel. Defaults to true.
+  final bool showSignUp;
 
   @override
   State<ClerkAuthentication> createState() => _ClerkAuthenticationState();
@@ -42,7 +48,9 @@ class _ClerkAuthenticationState extends State<ClerkAuthentication>
     with ClerkTelemetryStateMixin {
   _AuthState _state = _AuthState.signingIn;
 
-  void _toggle() => setState(() => _state = _state.nextState);
+  void _toggle() {
+    setState(() => _state = _state.nextState);
+  }
 
   @override
   void initState() {
@@ -115,7 +123,9 @@ class _ClerkAuthenticationState extends State<ClerkAuthentication>
           ),
         ],
       ),
-      bottomPortion: _BottomPortion(state: _state, onChange: _toggle),
+      bottomPortion: _state.isSigningIn && !widget.showSignUp
+          ? emptyWidget
+          : _BottomPortion(state: _state, onChange: _toggle),
     );
   }
 }
