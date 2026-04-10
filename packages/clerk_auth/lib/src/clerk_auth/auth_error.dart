@@ -11,8 +11,15 @@ class AuthError implements Exception {
   });
 
   /// Construct from an [ApiErrorCollection]
-  factory AuthError.from(ApiErrorCollection errors) =>
-      AuthError(code: errors.authErrorCode, message: errors.errorMessage);
+  factory AuthError.from(ApiErrorCollection errors) {
+    return AuthError(
+      code: errors.authErrorCode,
+      message: errors.errorMessage.contains(
+              '\`email_code\` isn\'t allowed for \`strategy\` when SAML is used.')
+          ? 'Please sign in. An account with this email address has already been created.'
+          : errors.errorMessage,
+    );
+  }
 
   /// Error code
   final AuthErrorCode? code;
