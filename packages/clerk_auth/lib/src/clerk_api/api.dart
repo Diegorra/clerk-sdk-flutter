@@ -201,6 +201,7 @@ class Api with Logging {
     String? web3Wallet,
     String? code,
     String? token,
+    String? redirectUrl,
     bool? legalAccepted,
     Map<String, dynamic>? metadata,
   }) async {
@@ -217,6 +218,7 @@ class Api with Logging {
         'web3_wallet': web3Wallet,
         'code': code,
         'token': token,
+        'redirect_url': redirectUrl,
         'legal_accepted': legalAccepted,
         if (metadata case Map<String, dynamic> metadata) //
           'unsafe_metadata': json.encode(metadata),

@@ -615,6 +615,14 @@ class Auth {
   /// Can be repeatedly called with updated parameters
   /// until the user is signed up and in.
   ///
+  /// On **create** (no existing sign-up), if the first [createSignUp] fails
+  /// because [Strategy.emailCode] is incompatible with SAML, the client
+  /// retries once with [Strategy.enterpriseSSO] (using [redirectUrl] or
+  /// [ClerkConstants.oauthRedirect]). If that fails with “no Enterprise
+  /// Connection” for the email domain, it retries once more with
+  /// [Strategy.emailCode]. Callers can pass the usual [strategy] (typically
+  /// [Strategy.emailCode]) without encoding SAML vs consumer domains in UI.
+  ///
   Future<Client> attemptSignUp({
     required Strategy strategy,
     String? firstName,
@@ -641,21 +649,58 @@ class Auth {
     }
 
     final didCreateInThisCall = !hasInitialSignUp;
+    var createStrategy = strategy;
     if (hasInitialSignUp == false) {
-      await _api
-          .createSignUp(
-            strategy: strategy,
-            password: password,
-            firstName: firstName,
-            lastName: lastName,
-            username: username,
-            emailAddress: emailAddress,
-            phoneNumber: phoneNumber,
-            token: token,
-            legalAccepted: legalAccepted,
-          )
-          .then(_housekeeping);
+      String? redirectForCreate(Strategy s) {
+        if (s == Strategy.enterpriseSSO) {
+          return redirectUrl ?? ClerkConstants.oauthRedirect;
+        }
+        return redirectUrl;
+      }
+
+      Future<ApiResponse> create(Strategy s) {
+        return _api.createSignUp(
+          strategy: s,
+          password: password,
+          firstName: firstName,
+          lastName: lastName,
+          username: username,
+          emailAddress: emailAddress,
+          phoneNumber: phoneNumber,
+          token: token,
+          redirectUrl: redirectForCreate(s),
+          legalAccepted: legalAccepted,
+        );
+      }
+
+      var resp = await create(strategy);
+
+      if (resp.isError &&
+          strategy == Strategy.emailCode &&
+          env.user.saml &&
+          (emailAddress?.isNotEmpty ?? false) &&
+          _signUpCreateErrorIndicatesEmailCodeIncompatibleWithSaml(resp)) {
+        resp = await create(Strategy.enterpriseSSO);
+        if (!resp.isError) {
+          createStrategy = Strategy.enterpriseSSO;
+        }
+      }
+
+      if (resp.isError &&
+          (emailAddress?.isNotEmpty ?? false) &&
+          env.supportsEmailCode &&
+          _signUpCreateErrorIndicatesNoEnterpriseConnection(resp)) {
+        resp = await create(Strategy.emailCode);
+        if (!resp.isError) {
+          createStrategy = Strategy.emailCode;
+        }
+      }
+
+      _housekeeping(resp);
     }
+
+    final strategyForCreateSideEffects =
+        didCreateInThisCall ? createStrategy : strategy;
 
     if (client.user is! User) {
       switch (client.signUp) {
@@ -697,12 +742,14 @@ class Auth {
         case SignUp signUp
             when signUp.status == Status.missingRequirements &&
                 signUp.missingFields.isEmpty &&
-                signUp.unverifiedFields.isNotEmpty:
+                signUp.unverifiedFields.isNotEmpty &&
+                !signUp.requiresEnterpriseSSOSignUp:
           // Skip prepareSignUp when we just created the sign-up with this strategy;
           // createSignUp already triggers sending the verification code.
           if (env.supportsPhoneCode &&
               signUp.unverified(Field.phoneNumber) &&
-              !(didCreateInThisCall && strategy == Strategy.phoneCode)) {
+              !(didCreateInThisCall &&
+                  strategyForCreateSideEffects == Strategy.phoneCode)) {
             await _api
                 .prepareSignUp(signUp, strategy: Strategy.phoneCode)
                 .then(_housekeeping);
@@ -710,7 +757,8 @@ class Auth {
 
           if (signUp.unverified(Field.emailAddress)) {
             if (env.supportsEmailCode &&
-                !(didCreateInThisCall && strategy == Strategy.emailCode)) {
+                !(didCreateInThisCall &&
+                    strategyForCreateSideEffects == Strategy.emailCode)) {
               await _api
                   .prepareSignUp(signUp, strategy: Strategy.emailCode)
                   .then(_housekeeping);
@@ -727,27 +775,29 @@ class Auth {
             }
           }
 
-        case SignUp signUp
-            when signUp.requiresEnterpriseSSOSignUp && redirectUrl is String:
+        case SignUp signUp when signUp.requiresEnterpriseSSOSignUp:
+          final enterpriseRedirectUrl =
+              redirectUrl ?? ClerkConstants.oauthRedirect;
           await _api
               .updateSignUp(
                 signUp,
-                strategy: strategy,
-                redirectUrl: redirectUrl,
+                strategy: Strategy.enterpriseSSO,
+                redirectUrl: enterpriseRedirectUrl,
               )
               .then(_housekeeping);
 
         case SignUp signUp
             when signUp.status == Status.missingRequirements &&
-                signUp.missingFields.isEmpty:
+                signUp.missingFields.isEmpty &&
+                !signUp.requiresEnterpriseSSOSignUp:
           // Skip prepareSignUp when we just created with email_code/phone_code;
           // createSignUp already sent the verification code.
           final skipPrepare = didCreateInThisCall &&
-              (strategy == Strategy.emailCode ||
-                  strategy == Strategy.phoneCode);
+              (strategyForCreateSideEffects == Strategy.emailCode ||
+                  strategyForCreateSideEffects == Strategy.phoneCode);
           if (!skipPrepare) {
             await _api
-                .prepareSignUp(signUp, strategy: strategy)
+                .prepareSignUp(signUp, strategy: strategyForCreateSideEffects)
                 .then(_housekeeping);
           }
           if (code is String || signature is String) {
@@ -1122,4 +1172,26 @@ class Auth {
       }
     }
   }
+}
+
+String _signUpCreateErrorText(ApiResponse resp) {
+  final errors = resp.errorCollection.errors;
+  if (errors == null) return '';
+  return errors
+      .map((e) => '${e.code ?? ''} ${e.message} ${e.longMessage ?? ''}')
+      .join(' ');
+}
+
+bool _signUpCreateErrorIndicatesEmailCodeIncompatibleWithSaml(
+  ApiResponse resp,
+) {
+  final t = _signUpCreateErrorText(resp).toLowerCase();
+  return t.contains('email_code') &&
+      (t.contains('saml') || t.contains('not allowed'));
+}
+
+bool _signUpCreateErrorIndicatesNoEnterpriseConnection(ApiResponse resp) {
+  final t = _signUpCreateErrorText(resp).toLowerCase();
+  return t.contains('enterprise connection') ||
+      t.contains('no corresponding enterprise');
 }
