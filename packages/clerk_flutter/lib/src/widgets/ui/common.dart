@@ -2,6 +2,7 @@
 
 import 'package:clerk_flutter/src/assets.dart';
 import 'package:clerk_flutter/src/widgets/control/clerk_auth.dart';
+import 'package:clerk_flutter/src/widgets/ui/clerk_loading_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:phone_input/phone_input_package.dart';
@@ -15,14 +16,8 @@ final defaultOrgLogo = SvgPicture.asset(
   package: 'clerk_flutter',
 );
 
-const defaultLoadingWidget = Center(
-  child: SizedBox.square(
-    dimension: 32,
-    child: Padding(
-      padding: allPadding4,
-      child: CircularProgressIndicator(strokeWidth: 2),
-    ),
-  ),
+final defaultLoadingWidget = Center(
+  child: ClerkLoadingIndicator(),
 );
 
 const emptyWidget = SizedBox();

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:clerk_auth/clerk_auth.dart' as clerk;
 import 'package:clerk_flutter/clerk_flutter.dart';
 import 'package:clerk_flutter/src/utils/clerk_sdk_localization_ext.dart';
+import 'package:clerk_flutter/src/widgets/ui/clerk_auth_success_celebration.dart';
 import 'package:clerk_flutter/src/widgets/ui/clerk_loading_overlay.dart';
 import 'package:clerk_flutter/src/widgets/ui/clerk_overlay_host.dart';
 import 'package:collection/collection.dart';
@@ -312,6 +313,11 @@ class ClerkAuthState extends clerk.Auth with ChangeNotifier {
     } on clerk.AuthError catch (e) {
       addError(e);
     }
+  }
+
+  /// Success animation; see [ClerkAuthSuccessCelebration.show]
+  Future<void> playSuccessCelebration(BuildContext context) {
+    return ClerkAuthSuccessCelebration.show(context);
   }
 
   /// Convenience method to make an auth call to the backend via ClerkAuth

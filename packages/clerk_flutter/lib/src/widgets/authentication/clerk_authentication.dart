@@ -153,7 +153,8 @@ class _BottomPortion extends StatelessWidget {
                       ? localizations.signUp
                       : localizations.signIn,
                   style: themeExtension.styles.subheading.copyWith(
-                    color: themeExtension.colors.text,
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.bold,
                   ),
                   recognizer: TapGestureRecognizer()..onTap = onChange,
                 ),

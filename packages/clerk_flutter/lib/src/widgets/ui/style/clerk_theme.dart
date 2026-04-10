@@ -114,6 +114,27 @@ class ClerkThemeColors {
   /// link color
   final Color link;
 
+  /// Copy with overrides (e.g. [link] for branded links).
+  ClerkThemeColors copyWith({
+    Color? background,
+    Color? altBackground,
+    Color? borderSide,
+    Color? text,
+    Color? lightweightText,
+    Color? error,
+    Color? link,
+  }) {
+    return ClerkThemeColors(
+      background: background ?? this.background,
+      altBackground: altBackground ?? this.altBackground,
+      borderSide: borderSide ?? this.borderSide,
+      text: text ?? this.text,
+      lightweightText: lightweightText ?? this.lightweightText,
+      error: error ?? this.error,
+      link: link ?? this.link,
+    );
+  }
+
   /// lerp
   ClerkThemeColors lerp(ClerkThemeColors other, double t) {
     return ClerkThemeColors(

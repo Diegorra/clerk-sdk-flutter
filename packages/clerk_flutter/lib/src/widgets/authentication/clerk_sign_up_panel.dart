@@ -154,14 +154,12 @@ class _ClerkSignUpPanelState extends State<ClerkSignUpPanel>
 
     final username = _valueOrNull(clerk.UserAttribute.username);
     final emailAddress = _valueOrNull(clerk.UserAttribute.emailAddress);
-    final redirectUri = authState.emailVerificationRedirectUri(context);
+    final emailLinkRedirectUri =
+        authState.emailVerificationRedirectUri(context);
     final phoneNumber = _valueOrNull(clerk.UserAttribute.phoneNumber)
         ?.replaceAll(_phoneNumberRE, '')
         .orNullIfEmpty;
 
-    // Use password strategy only when sign-up requires it; otherwise use
-    // email_code so the backend accepts the request when "Sign-up with password"
-    // is disabled in the Clerk Dashboard.
     final requiresPassword =
         authState.signUp?.requires(clerk.Field.password) == true;
     final usePasswordStrategy =
@@ -171,6 +169,7 @@ class _ClerkSignUpPanelState extends State<ClerkSignUpPanel>
         : (emailAddress != null && authState.env.supportsEmailCode
             ? clerk.Strategy.emailCode
             : clerk.Strategy.password);
+    final redirectUrlForSignUp = emailLinkRedirectUri?.toString();
 
     setState(() => _isLoading = true);
     try {
@@ -187,7 +186,7 @@ class _ClerkSignUpPanelState extends State<ClerkSignUpPanel>
             password: usePasswordStrategy ? password : null,
             passwordConfirmation:
                 usePasswordStrategy ? passwordConfirmation : null,
-            redirectUrl: redirectUri?.toString(),
+            redirectUrl: redirectUrlForSignUp,
             legalAccepted: _needsLegalAcceptance ? _hasLegalAcceptance : null,
           );
         },
@@ -236,10 +235,11 @@ class _ClerkSignUpPanelState extends State<ClerkSignUpPanel>
             when data.isEnabled) //
           _Attribute(attr, data),
     ];
-    final isAwaitingCode = (env.supportsEmailCode &&
-            signUp?.unverified(clerk.Field.emailAddress) == true) ||
-        (env.supportsPhoneCode &&
-            signUp?.unverified(clerk.Field.phoneNumber) == true);
+    final emailAwaitingCode = (env.supportsEmailCode &&
+        signUp?.unverified(clerk.Field.emailAddress) == true);
+    final phoneAwaitingCode = env.supportsPhoneCode &&
+        signUp?.unverified(clerk.Field.phoneNumber) == true;
+    final isAwaitingCode = emailAwaitingCode || phoneAwaitingCode;
 
     // if we have both first and last name, associate them
     attributes.firstWhereOrNull((a) => a.isFirstName)?.associated =
@@ -338,24 +338,27 @@ class _ClerkSignUpPanelState extends State<ClerkSignUpPanel>
         if (_needsLegalAcceptance) //
           Closeable(
             closed: _state.isWaiting,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: _acceptTerms,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(0, 8, 8, 8),
-                    child: Icon(
-                      _hasLegalAcceptance
-                          ? Icons.check_box_outlined
-                          : Icons.check_box_outline_blank,
+            child: Padding(
+              padding: EdgeInsets.only(top: _hasLegalAcceptance ? 16.0 : 0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _acceptTerms,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 8, 8, 8),
+                      child: Icon(
+                        _hasLegalAcceptance
+                            ? Icons.check_box_outlined
+                            : Icons.check_box_outline_blank,
+                      ),
                     ),
                   ),
-                ),
-                const Expanded(child: _LegalAcceptanceConfirmation()),
-              ],
+                  const Expanded(child: _LegalAcceptanceConfirmation()),
+                ],
+              ),
             ),
           ),
         verticalMargin32,
@@ -455,7 +458,7 @@ class _LegalAcceptanceConfirmation extends StatelessWidget {
     String text,
     String target,
     String? url,
-    ClerkThemeExtension themeExtension,
+    Color linkColor,
   ) {
     if (url case String url when url.isNotEmpty) {
       final segments = text.split(target);
@@ -467,7 +470,7 @@ class _LegalAcceptanceConfirmation extends StatelessWidget {
         spans.add(
           TextSpan(
             text: target,
-            style: TextStyle(color: themeExtension.colors.link),
+            style: TextStyle(color: linkColor),
             recognizer: recognizer,
           ),
         );
@@ -493,12 +496,12 @@ class _LegalAcceptanceConfirmation extends StatelessWidget {
     final authState = ClerkAuth.of(context, listen: false);
     final display = authState.env.display;
     final l10ns = authState.localizationsOf(context);
-    final themeExtension = ClerkAuth.themeExtensionOf(context);
+    final linkColor = Theme.of(context).colorScheme.primary;
     final spans = _subSpans(
       l10ns.acceptTerms,
       l10ns.termsOfService,
       display.termsUrl,
-      themeExtension,
+      linkColor,
     );
 
     return [
@@ -508,7 +511,7 @@ class _LegalAcceptanceConfirmation extends StatelessWidget {
             text,
             l10ns.privacyPolicy,
             display.privacyPolicyUrl,
-            themeExtension,
+            linkColor,
           )
         else //
           span,

@@ -21,6 +21,12 @@ typedef ClerkSdkGrammarCollection = Map<String, ClerkSdkGrammar>;
 ///
 typedef ClerkRedirectUriGenerator = Uri? Function(BuildContext, clerk.Strategy);
 
+class _UseDefaultLoadingWidget {
+  const _UseDefaultLoadingWidget();
+}
+
+const _kUseDefaultLoadingWidget = _UseDefaultLoadingWidget();
+
 /// An extended [clerk.AuthConfig] to allow the addition of:
 ///
 /// [localizations] for l10n needs
@@ -38,7 +44,7 @@ class ClerkAuthConfig extends clerk.AuthConfig {
     super.clientRefreshPeriod,
     super.httpService,
     super.httpConnectionTimeout,
-    this.loading = defaultLoadingWidget,
+    Object? loading = _kUseDefaultLoadingWidget,
     this.redirectionGenerator,
     this.deepLinkStream,
     ClerkFileCache? fileCache,
@@ -48,7 +54,10 @@ class ClerkAuthConfig extends clerk.AuthConfig {
     ClerkSdkGrammar? fallbackGrammar,
     clerk.Persistor? persistor,
     ClerkSdkFlags flags = const ClerkSdkFlags(),
-  })  : localizations = localizations ?? {'en': _englishLocalizations},
+  })  : loading = identical(loading, _kUseDefaultLoadingWidget)
+            ? defaultLoadingWidget
+            : loading as Widget?,
+        localizations = localizations ?? {'en': _englishLocalizations},
         fallbackLocalization = fallbackLocalization ?? _englishLocalizations,
         grammars = grammars ?? {'en': _englishGrammar},
         fallbackGrammar = fallbackGrammar ?? _englishGrammar,
@@ -90,8 +99,7 @@ class ClerkAuthConfig extends clerk.AuthConfig {
   /// SDK might be interested in
   final Stream<ClerkDeepLink?>? deepLinkStream;
 
-  /// The [Widget] to display while loading data, override with null
-  /// to disable the loading overlay or use your own widget.
+  /// Loading overlay widget; omit for [defaultLoadingWidget], or null to disable
   final Widget? loading;
 
   /// Flags used to affect behaviour

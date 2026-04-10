@@ -615,13 +615,8 @@ class Auth {
   /// Can be repeatedly called with updated parameters
   /// until the user is signed up and in.
   ///
-  /// On **create** (no existing sign-up), if the first [createSignUp] fails
-  /// because [Strategy.emailCode] is incompatible with SAML, the client
-  /// retries once with [Strategy.enterpriseSSO] (using [redirectUrl] or
-  /// [ClerkConstants.oauthRedirect]). If that fails with “no Enterprise
-  /// Connection” for the email domain, it retries once more with
-  /// [Strategy.emailCode]. Callers can pass the usual [strategy] (typically
-  /// [Strategy.emailCode]) without encoding SAML vs consumer domains in UI.
+  /// First [createSignUp] may retry with [Strategy.enterpriseSSO] or
+  /// [Strategy.emailCode] based on Clerk error responses (SAML / enterprise).
   ///
   Future<Client> attemptSignUp({
     required Strategy strategy,
